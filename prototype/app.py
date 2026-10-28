@@ -147,11 +147,10 @@ if image_file is not None:
         batch, display_image = preprocess_image(uploaded_image)
 
         st.image(
-            display_image,
-            caption="Image used for prediction",
-            use_container_width=True,
-        )
-
+    display_image,
+    caption="Image used for prediction",
+    width=300,
+)
         with st.spinner("Loading model and classifying image..."):
             model = load_model()
             probabilities = model.predict(batch, verbose=0)[0]
