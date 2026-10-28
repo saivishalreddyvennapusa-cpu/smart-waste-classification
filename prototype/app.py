@@ -2,8 +2,9 @@
 import os
 from pathlib import Path
 
-# Windows GPU DLL setup must happen before importing TensorFlow.
+# ---------------- WINDOWS TENSORFLOW DLL SETUP ----------------
 _DLL_HANDLE = None
+
 if os.name == "nt" and os.environ.get("CONDA_PREFIX"):
     dll_path = Path(os.environ["CONDA_PREFIX"]) / "Library" / "bin"
     if dll_path.exists():
@@ -13,13 +14,12 @@ import numpy as np
 import streamlit as st
 import tensorflow as tf
 from PIL import Image
-from tensorflow.keras import layers, models
-from tensorflow.keras.applications import EfficientNetB0
+
 
 # ---------------- CONFIGURATION ----------------
 ROOT = Path(__file__).resolve().parent
-WEIGHTS_PATH = (
-    ROOT.parent / "models" / "waste_efficientnetb0_v5_finetuned.weights.h5"
+MODEL_PATH = (
+    ROOT.parent / "models" / "waste_efficientnetb0_v5_fullmodel.h5"
 )
 
 IMG_SIZE = (224, 224)
@@ -38,114 +38,67 @@ CLASS_NAMES = [
 
 DISPOSAL_GUIDANCE = {
     "E-waste": (
-        "Keep separate from household rubbish. Use an authorised "
-        "electronic-waste collection point."
+        "Take electronic devices to an authorized e-waste collection "
+        "centre. Do not put electronic components in regular household waste."
     ),
     "automobile wastes": (
-        "Keep vehicle-related waste separate. Contact an authorised "
-        "automotive recycler or service centre."
+        "Use an authorized automotive recycling or service centre. "
+        "Do not dispose of automotive fluids or parts carelessly."
     ),
     "battery waste": (
-        "Do not put batteries in general waste. Use a designated battery "
-        "collection point and avoid short-circuiting the terminals."
+        "Take batteries to an authorized battery collection or recycling "
+        "point. Do not burn, puncture, or place them in regular waste."
     ),
     "glass waste": (
-        "Separate clean glass where locally accepted. Wrap broken glass "
-        "securely and follow local collection rules."
+        "Separate glass for recycling where accepted. Handle broken glass "
+        "carefully and package it safely."
     ),
     "light bulbs": (
-        "Handle bulbs carefully. CFL and fluorescent bulbs may contain "
-        "hazardous materials; use a designated collection point."
+        "Take fluorescent and other specialist bulbs to an appropriate "
+        "collection point. Avoid breaking them."
     ),
     "metal waste": (
-        "Separate recyclable metal and take it to a local recycling "
-        "collection point or authorised scrap dealer."
+        "Separate clean metal for recycling and take it to an accepted "
+        "scrap or recycling collection point."
     ),
     "organic waste": (
-        "Food and garden waste may be suitable for composting or municipal "
-        "organic-waste collection."
+        "Place suitable food scraps and garden waste in a composting or "
+        "municipal organic-waste collection system."
     ),
     "paper waste": (
-        "Keep paper clean and dry for recycling. Food-soiled paper may "
-        "not be accepted."
+        "Keep paper dry and clean, then place it in the paper-recycling "
+        "stream where available."
     ),
     "plastic waste": (
-        "Separate plastic and follow local recycling rules. Not every "
-        "plastic type is recyclable."
+        "Check local recycling rules, empty the container, and separate "
+        "accepted plastics for collection."
     ),
 }
 
-# ---------------- MODEL LOADING ----------------
+
+# ---------------- LOAD CONVERTED MODEL ----------------
 @st.cache_resource
 def load_model():
-    if not WEIGHTS_PATH.is_file():
+    if not MODEL_PATH.is_file():
         raise FileNotFoundError(
-            f"V5 checkpoint not found: {WEIGHTS_PATH}"
+            f"Converted model not found: {MODEL_PATH}. "
+            "Check that the model file is committed to GitHub."
         )
 
-    augmentation = tf.keras.Sequential(
-        [
-            layers.RandomFlip("horizontal"),
-            layers.RandomRotation(0.05),
-            layers.RandomZoom(0.08),
-            layers.RandomContrast(0.10),
-        ],
-        name="augmentation",
+    model = tf.keras.models.load_model(
+        str(MODEL_PATH),
+        compile=False,
     )
-
-    base_model = EfficientNetB0(
-        include_top=False,
-        weights=None,
-        input_shape=IMG_SIZE + (3,),
-    )
-
-    base_model.trainable = True
-
-    for layer in base_model.layers[:-30]:
-        layer.trainable = False
-
-    for layer in base_model.layers:
-        if isinstance(layer, layers.BatchNormalization):
-            layer.trainable = False
-
-    inputs = layers.Input(shape=IMG_SIZE + (3,))
-    x = augmentation(inputs)
-    x = base_model(x, training=False)
-    x = layers.GlobalAveragePooling2D()(x)
-    x = layers.Dropout(0.30)(x)
-    x = layers.Dense(256, activation="relu")(x)
-    x = layers.Dropout(0.25)(x)
-    outputs = layers.Dense(
-        len(CLASS_NAMES), activation="softmax"
-    )(x)
-
-    model = models.Model(inputs, outputs)
-
-    # Build model variables before restoring the trained weights.
-    model(
-        tf.zeros((1, IMG_SIZE[0], IMG_SIZE[1], 3)),
-        training=False,
-    )
-
-    try:
-        model.load_weights(str(WEIGHTS_PATH))
-    except Exception as error:
-        raise RuntimeError(
-            "Could not load the trained V5 weights. "
-            f"TensorFlow version: {tf.__version__}. "
-            "The checkpoint format may be incompatible with "
-            "the installed Keras version. Original error: "
-            f"{error}"
-        ) from error
 
     return model
+
 
 # ---------------- IMAGE PREPROCESSING ----------------
 def preprocess_image(pil_image):
     image = pil_image.convert("RGB")
     image = image.resize(IMG_SIZE)
 
-    # Keep pixels in 0-255 range, matching the training pipeline.
+    # Match the original training pipeline: pixel values remain 0–255.
     array = np.asarray(image, dtype=np.float32)
     batch = np.expand_dims(array, axis=0)
 
@@ -160,11 +113,15 @@ st.set_page_config(
 )
 
 st.title("♻️ Smart Waste Classification")
-st.caption("EfficientNetB0 V5 | Nine waste categories | Local inference")
+
+st.caption(
+    "EfficientNetB0 V5 | Nine waste categories | Image classification"
+)
 
 st.info(
-    "The model achieved 86.40% test accuracy on your recorded test set. "
-    "Predictions may be incorrect; use them as guidance, not as a safety guarantee."
+    "The model achieved 86.40% test accuracy on the recorded test set. "
+    "Predictions can be incorrect and should be used as guidance, "
+    "not as a safety guarantee."
 )
 
 image_source = st.radio(
@@ -183,21 +140,27 @@ if image_source == "Upload image":
 else:
     image_file = st.camera_input("Capture a waste image")
 
+
 if image_file is not None:
     try:
         uploaded_image = Image.open(image_file)
         batch, display_image = preprocess_image(uploaded_image)
 
-        # Compatible with Streamlit 1.22.0.
         st.image(
             display_image,
             caption="Image used for prediction",
-            use_column_width=True,
+            use_container_width=True,
         )
 
         with st.spinner("Loading model and classifying image..."):
             model = load_model()
             probabilities = model.predict(batch, verbose=0)[0]
+
+        if len(probabilities) != len(CLASS_NAMES):
+            raise ValueError(
+                f"Expected {len(CLASS_NAMES)} class scores, "
+                f"but received {len(probabilities)}."
+            )
 
         best_index = int(np.argmax(probabilities))
         best_class = CLASS_NAMES[best_index]
@@ -205,6 +168,7 @@ if image_file is not None:
 
         st.subheader("Prediction")
         st.success("Predicted category: " + best_class)
+
         st.metric(
             label="Model confidence",
             value=f"{confidence * 100:.2f}%",
@@ -212,8 +176,8 @@ if image_file is not None:
 
         if confidence < 0.60:
             st.warning(
-                "Confidence is relatively low. Try a clearer image with "
-                "one main waste item and better lighting."
+                "Confidence is relatively low. Try a clearer image "
+                "with one main waste item and better lighting."
             )
 
         st.subheader("Top 3 predictions")
@@ -225,14 +189,14 @@ if image_file is not None:
             score = float(probabilities[index])
 
             st.write(f"**{category}** — {score * 100:.2f}%")
-            st.progress(score)
+            st.progress(float(np.clip(score, 0.0, 1.0)))
 
         st.subheader("Suggested handling")
         st.write(DISPOSAL_GUIDANCE[best_class])
 
         st.caption(
-            "Always follow local waste-management rules, especially for "
-            "batteries, electronic waste and light bulbs."
+            "Always follow local waste-management rules, especially "
+            "for batteries, electronic waste, and light bulbs."
         )
 
     except Exception as error:
@@ -244,4 +208,7 @@ else:
     )
 
 st.divider()
-st.caption("Project: Deep Learning-Based Waste Classification Using Computer Vision")
+
+st.caption(
+    "Project: Deep Learning-Based Waste Classification Using Computer Vision"
+)
