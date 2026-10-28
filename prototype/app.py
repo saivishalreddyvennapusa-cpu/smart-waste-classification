@@ -85,12 +85,10 @@ def load_model():
             "Check that the model file is committed to GitHub."
         )
 
-    model = tf.keras.models.load_model(
+    return tf.keras.models.load_model(
         str(MODEL_PATH),
         compile=False,
     )
-
-    return model
 
 
 # ---------------- IMAGE PREPROCESSING ----------------
@@ -98,7 +96,7 @@ def preprocess_image(pil_image):
     image = pil_image.convert("RGB")
     image = image.resize(IMG_SIZE)
 
-    # Match the original training pipeline: pixel values remain 0–255.
+    # Keep pixel values in the original 0-255 range.
     array = np.asarray(image, dtype=np.float32)
     batch = np.expand_dims(array, axis=0)
 
@@ -143,14 +141,22 @@ else:
 
 if image_file is not None:
     try:
-        uploaded_image = Image.open(image_file)
+        # Read the uploaded bytes once.
+        image_bytes = image_file.getvalue()
+
+        uploaded_image = Image.open(
+            __import__("io").BytesIO(image_bytes)
+        ).convert("RGB")
+
         batch, display_image = preprocess_image(uploaded_image)
 
+        # Display the original uploaded bytes instead of the PIL object.
         st.image(
-    display_image,
-    caption="Image used for prediction",
-    width=300,
-)
+            image_bytes,
+            caption="Image used for prediction",
+            width=300,
+        )
+
         with st.spinner("Loading model and classifying image..."):
             model = load_model()
             probabilities = model.predict(batch, verbose=0)[0]
