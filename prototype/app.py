@@ -80,12 +80,9 @@ DISPOSAL_GUIDANCE = {
 def load_model():
     if not WEIGHTS_PATH.is_file():
         raise FileNotFoundError(
-            "V5 checkpoint was not found:\n"
-            + str(WEIGHTS_PATH)
-            + "\n\nEnsure the checkpoint exists in the project's models folder."
+            f"V5 checkpoint not found: {WEIGHTS_PATH}"
         )
 
-    # Rebuild the same architecture used for V5 training.
     augmentation = tf.keras.Sequential(
         [
             layers.RandomFlip("horizontal"),
@@ -124,15 +121,24 @@ def load_model():
 
     model = models.Model(inputs, outputs)
 
-    # Build variables before loading the existing weights.
+    # Build model variables before restoring the trained weights.
     model(
         tf.zeros((1, IMG_SIZE[0], IMG_SIZE[1], 3)),
         training=False,
     )
-    model.load_weights(str(WEIGHTS_PATH))
+
+    try:
+        model.load_weights(str(WEIGHTS_PATH))
+    except Exception as error:
+        raise RuntimeError(
+            "Could not load the trained V5 weights. "
+            f"TensorFlow version: {tf.__version__}. "
+            "The checkpoint format may be incompatible with "
+            "the installed Keras version. Original error: "
+            f"{error}"
+        ) from error
 
     return model
-
 
 # ---------------- IMAGE PREPROCESSING ----------------
 def preprocess_image(pil_image):
