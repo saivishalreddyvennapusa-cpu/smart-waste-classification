@@ -1,0 +1,18 @@
+Test loss: 0.6190
+Test accuracy: 81.33%
+
+                   precision    recall  f1-score   support
+
+          E-waste       0.80      0.84      0.82       313
+automobile wastes       0.79      0.84      0.82       218
+    battery waste       0.94      0.75      0.83       213
+      glass waste       0.87      0.73      0.80       256
+      light bulbs       0.89      0.72      0.80       105
+      metal waste       0.76      0.84      0.80       308
+    organic waste       0.90      0.83      0.86       223
+      paper waste       0.78      0.90      0.83       343
+    plastic waste       0.76      0.77      0.77       329
+
+         accuracy                           0.81      2308
+        macro avg       0.83      0.80      0.81      2308
+     weighted avg       0.82      0.81      0.81      2308
