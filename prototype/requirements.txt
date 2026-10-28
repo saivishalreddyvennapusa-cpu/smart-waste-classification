@@ -1,6 +1,8 @@
-streamlit
-Pillow
+streamlit==1.22.0
+tensorflow==2.10.1
+protobuf==3.19.6
 numpy==1.23.5
+Pillow>=9.0,<11
 # TensorFlow is already installed in the existing Windows wastegpu environment (2.10.1).
 # For embedded Linux/Raspberry Pi, install a TensorFlow build compatible with that device separately.
 # opencv-python is only required for embedded_camera.py:
